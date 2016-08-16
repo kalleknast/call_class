@@ -21,75 +21,69 @@ for sub_dir in glob(data_dir + '/*'):
     
 
 if not len(glob('call_class_features.npz')):
-    X, y, codebook, reverse_codebook = get_data(call_fnames, N)
-    np.savez('call_class_features.npz', X=X, y=y,
-             codebook=codebook, reverse_codebook=reverse_codebook)
+    X, y, codebook = get_data(call_fnames, N)
+    np.savez('call_class_features.npz', X=X, y=y, codebook=codebook)
 else:
-    with np.load('call_class_features.npz') as features:
-        X = features['X']
-        y = features['y']
-        codebook = features['codebook'].tolist()
-        reverse_codebook = features['reverse_codebook'].tolist()
+    with np.load('call_class_features.npz') as tmp:
+        X = tmp['X']
+        y = tmp['y']
+        codebook = tmp['codebook'].tolist()
+
         
 ##########################
 # Table 2 and Figure 2:
 ##########################
 # Merge phee_2, phee_3 and phee_4        
 drop = True
-mrg_X, mrg_y, mrg_reverse_codebook, mrg_codebook = merge_calltypes(X, y, reverse_codebook, codebook,
-                                              calltypes2merge=['phee_2', 'phee_3', 'phee_4'],
-                                              merged_calltype='phee',
-                                              drop=drop)
+X_mrg, y_mrg, codebook_mrg = merge_calltypes(X, y, codebook,
+                                             calltypes2merge=['phee_2', 'phee_3', 'phee_4'],
+                                             merged_calltype='phee',
+                                             drop=drop)
 
 # Merge tsik and tsik_ek
-mrg_X, mrg_y, mrg_reverse_codebook, mrg_codebook = merge_calltypes(mrg_X, mrg_y, mrg_reverse_codebook, mrg_codebook,
-                                              calltypes2merge=['tsik_ek', 'tsik'],
-                                              merged_calltype='tsik',
-                                              drop=drop)
+X_mrg, y_mrg, codebook_mrg = merge_calltypes(X_mrg, y_mrg, codebook_mrg,
+                                             calltypes2merge=['tsik_ek', 'tsik'],
+                                             merged_calltype='tsik',
+                                             drop=drop)
 
 if not len(glob('call_class_results.npz')):
-    results = get_results(mrg_X, mrg_y, mrg_reverse_codebook, n_rep=100)
-    np.savez('call_class_results.npz', results=results)
+    results = get_results(X_mrg, y_mrg, n_rep=100)
+    np.savez('call_class_results.npz', results=results, codebook_mrg=codebook_mrg)
 else:
-    with np.load('call_class_results.npz') as results:
-        results = results['results'].tolist()
+    with np.load('call_class_results.npz') as tmp:
+        results = tmp['results'].tolist()
+        codebook_mrg = tmp['codebook_mrg'].tolist()
 
 print_table2(results)
 plot_figure2(results)
 
-confuse_mat1 = get_confusion_matrix(mrg_X, mrg_y, mrg_reverse_codebook, n_rep=100)
-print_table3(confuse_mat1, mrg_reverse_codebook)
+confuse_mat1 = get_confusion_matrix(X_mrg, y_mrg, codebook_mrg, n_rep=100)
+print_table3(confuse_mat1, codebook_mrg)
 
 phee_cbook = {}
-phee_rcbook = {}
 bix = np.zeros(y.shape[0], dtype=bool)
-for call_type in reverse_codebook:
+for call_type in codebook:
     if 'phee' in call_type:
-        code = reverse_codebook[call_type]
-        phee_cbook[code] = call_type
-        phee_rcbook[call_type] = code
+        code = codebook[call_type]
+        phee_cbook[call_type] = code
         bix = np.logical_or(bix, y == code)  # and or, not exclusive or
 y_phee = y[bix]
 X_phee = X[bix]
-confuse_mat2 = get_confusion_matrix(X_phee, y_phee, phee_rcbook, n_rep=100)
-print_table4(confuse_mat2, phee_rcbook)
+confuse_mat2 = get_confusion_matrix(X_phee, y_phee, phee_cbook, n_rep=100)
+print_table4(confuse_mat2, phee_cbook)
 
 
 tsik_cbook = {}
-tsik_rcbook = {}
 bix = np.zeros(y.shape[0], dtype=bool)
-for call_type in reverse_codebook:
+for call_type in codebook:
     if 'tsik' in call_type:
-        code = reverse_codebook[call_type]
-        tsik_cbook[code] = call_type
-        tsik_rcbook[call_type] = code
+        code = codebook[call_type]
+        tsik_cbook[call_type] = code
         bix = np.logical_or(bix, y == code)  # and or, not exclusive or
 y_tsik = y[bix]
 X_tsik = X[bix]
-confuse_mat3 = get_confusion_matrix(X_tsik, y_tsik, tsik_rcbook, n_rep=100)
-print_table5(confuse_mat3, tsik_rcbook)
+confuse_mat3 = get_confusion_matrix(X_tsik, y_tsik, tsik_cbook, n_rep=100)
+print_table5(confuse_mat3, tsik_cbook)
 
 
 
-    
-    

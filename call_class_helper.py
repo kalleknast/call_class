@@ -58,13 +58,12 @@ def accuracy(y_predict, y_true, nClass=8):
 def get_data(call_fnames, N):
     """
     """
-    order = 100 
+    order = 20
     X = np.empty((N, order))
     y = np.empty(N)
     
     codes = {}
     codebook = {}
-    reverse_codebook = {}
     
     i = 0
     code = 0
@@ -75,55 +74,48 @@ def get_data(call_fnames, N):
             print(N-i)
             fs, signal = wavfile.read(fn)
             signal = signal.astype(float) / (2**16/2.)   # from int16 to float
-            x = lazy_lpc.lpc.kautocor(signal, 20)
+            x = lazy_lpc.lpc.kautocor(signal, order)
             X[i] = x.numerator[1:]
             y[i] = codes[call_type]
-            codebook[code] = call_type
-            reverse_codebook[call_type] = code
+            codebook[call_type] = code
             i += 1
 
         code += 1
     
-    return X, y, codebook, reverse_codebook
+    return X, y, codebook
     
     
-def merge_calltypes(X, y, reverse_codebook, codebook,
+def merge_calltypes(X, y, codebook,
                     calltypes2merge=['phee_2', 'phee_3', 'phee_4'],
-                    merged_calltype=None,
-                    drop=True):
+                    merged_calltype=None, drop=True):
     """
     """
 
     if merged_calltype is None:
         merged_calltype = calltypes2merge[0]
 
-    mergecode = reverse_codebook[calltypes2merge[0]]
+    mergecode = codebook[calltypes2merge[0]]
     merged_y = y.copy()
     merged_X = X.copy()
-    merged_reverse_codebook = reverse_codebook.copy()
     merged_codebook = codebook.copy()
+    rev_codebook = {codebook[ct]: ct for ct in codebook}
     
     for calltype in calltypes2merge:
-        code = reverse_codebook[calltype]
+        code = codebook[calltype]
         merged_y[y == code] = mergecode
-        merged_reverse_codebook.pop(calltype)
-        merged_reverse_codebook[merged_calltype] = mergecode
-        merged_codebook.pop(code)
-        merged_codebook[mergecode] = merged_calltype
+        merged_codebook.pop(calltype)
+        merged_codebook[merged_calltype] = mergecode
+        rev_codebook.pop(code)
+        rev_codebook[mergecode] = merged_calltype
                      
     codes = np.unique(merged_y)
     for i, code in enumerate(codes):
         merged_y[merged_y == code] = i
-        calltype = merged_codebook[int(code)]
-        merged_reverse_codebook[calltype] = i
-                
-    merged_codebook = {}
-    for calltype in merged_reverse_codebook:
-        code = merged_reverse_codebook[calltype]
-        merged_codebook[code] = calltype
-        
+        calltype = rev_codebook[int(code)]
+        merged_codebook[calltype] = i
+                        
     if drop:
-        merged_code = merged_reverse_codebook[merged_calltype]
+        merged_code = merged_codebook[merged_calltype]
         merged_ix = (merged_y == merged_code).nonzero()[0]
         np.random.shuffle(merged_ix)
         keep_ix = (merged_y != merged_code).nonzero()[0]
@@ -131,33 +123,25 @@ def merge_calltypes(X, y, reverse_codebook, codebook,
         merged_y = merged_y[keep_ix]
         merged_X = merged_X[keep_ix]
        
-    return merged_X, merged_y, merged_reverse_codebook, merged_codebook
-
-
-def read_Fortaleza_features(fname='8_all_20_LPC.txt'):
-    """
-    """
-    f = open(fname, 'r')
-    N = int(f.readline().split(' ')[0])
-    y = np.zeros(N)
-    X = np.zeros((N, 20))
-    
-    for i in range(N):
-        s = f.readline().split(' ')
-        y[i] = float(s[1])
-        X[i] = np.array(s[2:]).astype('float')
-
-    return X, y
+    return merged_X, merged_y, merged_codebook
     
     
 def get_kNN_params(X, y):
     
-    nrep = 5
+    #nrep = 5
     N = X.shape[0]
     
     k_range = range(1, N//2, 1)
-    scores = np.empty((nrep, len(k_range)))
+    #scores = np.empty((nrep, len(k_range)))
     
+    knn = KNeighborsClassifier()
+    param_grid = dict(n_neighbors=k_range)
+    cv = StratifiedKFold(y, n_folds=5)    
+    grid = GridSearchCV(knn, param_grid=param_grid, cv=cv)
+    grid.fit(X,y)
+    k = grid.best_params_['n_neighbors']
+    
+    """
     for rep in range(nrep):
         X_train, X_cv, y_train, y_cv = train_test_split(X, y, test_size=0.1)
     
@@ -169,6 +153,8 @@ def get_kNN_params(X, y):
     scores = scores.mean(axis=0)
 
     return k_range[scores.argmax()]
+    """
+    return k
 
     
 def get_SVM_params(X, y, kernel='rbf'):
@@ -238,7 +224,7 @@ def get_adaBoost_params(X, y):
     return params[scores.argmax()]              
     
 
-def get_results(X, y, reverse_codebook, n_rep=100):
+def get_results(X, y, n_rep=100):
     """
     """
     ## Model hyper parameters
@@ -367,11 +353,11 @@ def get_results(X, y, reverse_codebook, n_rep=100):
     time['MLP'] = 1000*timeit.timeit(wrapper(mlp.predict, X[0]), number=n)
     time['AdaBoost'] = 1000*timeit.timeit(wrapper(ada.predict, X[0]), number=n)
     time['Logistic Regression'] = 1000*timeit.timeit(wrapper(logits.predict, X[0]), number=n)
-    time['OPF -- Euclidean'] = 1000*timeit.timeit(wrapper(opf_ec.predict, X[0]), number=n)
-    time['OPF -- Manhattan'] = 1000*timeit.timeit(wrapper(opf_mh.predict, X[0]), number=n)
-    time['OPF -- Canberra'] = 1000*timeit.timeit(wrapper(opf_ca.predict, X[0]), number=n)
-    time['OPF -- Chi-Square'] = 1000*timeit.timeit(wrapper(opf_cs.predict, X[0]), number=n)
-    time['OPF -- Bray Curtis'] = 1000*timeit.timeit(wrapper(opf_bc.predict, X[0]), number=n)
+    time['OPF -- Euclidean'] = 1000*timeit.timeit(wrapper(opf_ec.predict, X[0].reshape((1,20))), number=n)
+    time['OPF -- Manhattan'] = 1000*timeit.timeit(wrapper(opf_mh.predict, X[0].reshape((1,20))), number=n)
+    time['OPF -- Canberra'] = 1000*timeit.timeit(wrapper(opf_ca.predict, X[0].reshape((1,20))), number=n)
+    time['OPF -- Chi-Square'] = 1000*timeit.timeit(wrapper(opf_cs.predict, X[0].reshape((1,20))), number=n)
+    time['OPF -- Bray Curtis'] = 1000*timeit.timeit(wrapper(opf_bc.predict, X[0].reshape((1,20))), number=n)
     
     # Get averages for table 2
     for method in acc.dtype.fields:
@@ -387,10 +373,10 @@ def get_results(X, y, reverse_codebook, n_rep=100):
     return results
     
     
-def get_confusion_matrix(X, y, reverse_codebook, n_rep=30):
+def get_confusion_matrix(X, y, codebook, n_rep=30):
     """
     """
-    confuse_mat = {call_type: {} for call_type in reverse_codebook}
+    confuse_mat = {call_type: {} for call_type in codebook}
     opf = OPF()
     classes = np.unique(y)
     
@@ -398,12 +384,12 @@ def get_confusion_matrix(X, y, reverse_codebook, n_rep=30):
         X_train, X_cv, y_train, y_cv = train_test_split(X, y, train_size=0.8)
         opf.fit(X_train, y_train.astype(np.int32), metric="euclidian")
     
-        for call_type in reverse_codebook:
-            code = reverse_codebook[call_type]
+        for call_type in codebook:
+            code = codebook[call_type]
             bix = (y_cv == code)
             y_pred = opf.predict(X_cv[bix])
-            for ctype in reverse_codebook:
-                cde = reverse_codebook[ctype]
+            for ctype in codebook:
+                cde = codebook[ctype]
                 if not ctype in confuse_mat[call_type]:
                     confuse_mat[call_type][ctype] = []
                 else:
@@ -415,9 +401,9 @@ def get_confusion_matrix(X, y, reverse_codebook, n_rep=30):
                     confuse_mat[call_type][ctype].append(pct)
                             
     # Normalize the confusion matrix
-    for call_type in reverse_codebook:
-        code = reverse_codebook[call_type]
-        for ctype in reverse_codebook:
+    for call_type in codebook:
+        code = codebook[call_type]
+        for ctype in codebook:
             m = np.nanmean(confuse_mat[call_type][ctype])
             if np.isnan(m):
                 pdb.set_trace()
@@ -427,9 +413,9 @@ def get_confusion_matrix(X, y, reverse_codebook, n_rep=30):
     return confuse_mat
     
 
-def print_table3(data, reverse_codebook):
+def print_table3(data, codebook):
     
-    call_types = list(reverse_codebook.keys())
+    call_types = list(codebook.keys())
     call_types.sort()
     
     print('ROT 90 DEGREES COMPARED TO TABLE 3!!!')
@@ -443,9 +429,9 @@ def print_table3(data, reverse_codebook):
         print('')
 
 
-def print_table4(data, reverse_codebook):
+def print_table4(data, codebook):
     
-    call_types = list(reverse_codebook.keys())
+    call_types = list(codebook.keys())
     call_types.sort()
     
     print('ROT 90 DEGREES COMPARED TO TABLE 3!!!')
@@ -459,9 +445,9 @@ def print_table4(data, reverse_codebook):
         print('')
 
 
-def print_table5(data, reverse_codebook):
+def print_table5(data, codebook):
     
-    call_types = list(reverse_codebook.keys())
+    call_types = list(codebook.keys())
     call_types.sort()
     
     print('ROT 90 DEGREES COMPARED TO TABLE 3!!!')
@@ -544,133 +530,3 @@ def plot_figure2(results):
     fig.savefig('Fig2.svg')
     fig.savefig('Fig2.eps')
     plt.show()                    
-
-    """                 
-    # OPF - Euclidean
-    ax.errorbar(splits, opf_ec_acc_M, opf_ec_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-
-    # OPF - Manhattan
-    ax.errorbar(splits, opf_mh_acc_M, opf_mh_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, opf_mh_acc_M[-1], opf_mh_acc_SE[-1], opf_mh_f1_M, opf_mh_f1_SE))
-    
-    # SVM
-    ax.errorbar(splits, svm_acc_M, svm_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, svm_acc_M[-1], svm_acc_SE[-1], svm_f1_M, svm_f1_SE))
-
-    # k-NN
-    ax.errorbar(splits, knn_acc_M, knn_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, knn_acc_M[-1], knn_acc_SE[-1], knn_f1_M, knn_f1_SE))
-
-    # bayes
-    ax.errorbar(splits, bayes_acc_M, bayes_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, bayes_acc_M[-1], bayes_acc_SE[-1], bayes_f1_M, bayes_f1_SE))                
-
-    # MLP
-    ax.errorbar(splits, mlp_acc_M, mlp_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, mlp_acc_M[-1], mlp_acc_SE[-1], mlp_f1_M, mlp_f1_SE))
-                               
-    # AdaBoost
-    ax.errorbar(splits, ada_acc_M, ada_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, ada_acc_M[-1], ada_acc_SE[-1], ada_f1_M, ada_f1_SE))
-                
-    # Logistic 
-    ax.errorbar(splits, logits_acc_M, logits_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                label=label, markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    print('%s\t Acc M: %1.4f, SE: %1.4f\tF1 M: %1.4f, SE: %1.4f' %
-          (label, logits_acc_M[-1], logits_acc_SE[-1], logits_f1_M, logits_f1_SE))
-
-
-    # OPF - Euclidean
-    label = 'OPF -- Euclidean'; mfc = 'k'; ls = '--'; ms = 's'; lc = 'k'
-    ax.errorbar(splits, opf_ec_acc_M, opf_ec_acc_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # OPF - Manhattan
-    label = 'OPF -- Manhattan'; mfc = 'k'; ls = '--'; ms = 'o'; lc = 'k'
-    ax.errorbar(splits, opf_mh_acc1_M, opf_mh_acc1_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # SVM
-    label = 'SVM'; mfc = 'y'; ls = '--'; ms = 'o'; lc = 'y'
-    ax.errorbar(splits, svm_acc1_M, svm_acc1_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # k-NN
-    label = 'k-NN'; mfc = 'r'; ls = '--'; ms = 'o'; lc = 'r'
-    ax.errorbar(splits, knn_acc1_M, knn_acc1_SE, linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)      
-    
-    ax.set_xlabel('Fraction of dataset', fontsize=18)
-    ax.set_ylabel('Accuracy', fontsize=18)
-    ax.set_ylim([0.5,1])
-    
-    ax.set_xlim([splits.min() - 0.01, splits.max() + 0.01])
-    ax.legend(loc=[0.75, 0.0], frameon=False, fontsize=9)
-    ax.set_xticks([0.2, 0.4, 0.6, 0.8])
-    ax.set_yticks([0.5, 0.6, 0.7, 0.8, 0.9, 1])
-    
-    
-    dataAcc, dataF1score, dataTime = read_LCdata()
-
-    data = dataAcc
-    dsfrac = np.unique(data['dsfrac'])
-    n = len(dsfrac)
-    types = list(np.unique(data['type']))
-    dtypes = [0]*len(types)
-    for i, t in enumerate(types):
-        dtypes[i] = (t, float)
-    M = np.recarray(n, dtype=dtypes)
-    SE = np.recarray(n, dtype=dtypes)
-    
-    for i, frac in enumerate(dsfrac):
-        for t in types:   
-            bix = np.logical_and(data['dsfrac'] == frac, data['norm'])
-            bix = np.logical_and(bix, data['type']==t)
-            M[t][i] = np.nanmean(data[bix]['acc'])
-            SE[t][i] = np.nanstd(data[bix]['acc'])/np.sqrt((~ np.isnan(data[bix]['acc'])).sum())
-    
-    # OPF - Euclidean
-    label = 'OPF -- Euclidean'; mfc = 'k'; ls = ':'; ms = 's'; lc = 'k'
-    ax.errorbar(splits, M['datEuclidean'], SE['datEuclidean'], linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # OPF - Manhattan
-    label = 'OPF -- Manhattan'; mfc = 'k'; ls = ':'; ms = 'o'; lc = 'k'
-    ax.errorbar(splits, M['datManhattan'], SE['datManhattan'],linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # SVM
-    label = 'SVM'; mfc = 'y'; ls = ':'; ms = 'o'; lc = 'y'
-    ax.errorbar(splits, M['svm'], SE['svm'], linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)  
-    # k-NN
-    label = 'k-NN'; mfc = 'r'; ls = ':'; ms = 'o'; lc = 'r'
-    ax.errorbar(splits, M['knn'], SE['knn'], linestyle=ls, marker=ms, color=lc, c='k',
-                markerfacecolor=mfc, elinewidth=1.5, capsize=0,
-                capthick=False)    
-            
-
-"""
