@@ -128,20 +128,12 @@ def merge_calltypes(X, y, codebook,
     
 def get_kNN_params(X, y):
     
-    #nrep = 5
+    nrep = 10
     N = X.shape[0]
     
     k_range = range(1, N//2, 1)
-    #scores = np.empty((nrep, len(k_range)))
+    scores = np.empty((nrep, len(k_range)))
     
-    knn = KNeighborsClassifier()
-    param_grid = dict(n_neighbors=k_range)
-    cv = StratifiedKFold(y, n_folds=5)    
-    grid = GridSearchCV(knn, param_grid=param_grid, cv=cv)
-    grid.fit(X,y)
-    k = grid.best_params_['n_neighbors']
-    
-    """
     for rep in range(nrep):
         X_train, X_cv, y_train, y_cv = train_test_split(X, y, test_size=0.1)
     
@@ -153,8 +145,6 @@ def get_kNN_params(X, y):
     scores = scores.mean(axis=0)
 
     return k_range[scores.argmax()]
-    """
-    return k
 
     
 def get_SVM_params(X, y, kernel='rbf'):
@@ -229,15 +219,16 @@ def get_results(X, y, n_rep=100):
     """
     ## Model hyper parameters
     #-----------------------
+    # Set to None to recompute
     # SVM hyperparameters
-    C = 8 # 32768 #C = 32.0  #C = None
-    gamma = 0.5 #0.00195 #gamma = 0.03125, #gamma = None
+    C = 8 # C = 32.0
+    gamma = 0.5 #0.00195 #gamma = 0.03125
     # k-NN -- num nearest neighbors
     k = 1 # k = None
     # MLP architecture
-    hidden_layers = (8, 16)  #hidden_layers = (8, 8)  # hidden_layers = ()
+    hidden_layers = (8, 16)  #hidden_layers = (8, 8)
     # AdaBoost params, n_estimators & learning_rate
-    ada_params = (160, 0.5)  # ()
+    ada_params = (160, 0.5)  #
     
     if C is None or gamma is None:
         print('Getting SVM parameters...')
@@ -249,12 +240,12 @@ def get_results(X, y, n_rep=100):
         k = get_kNN_params(X, y)
         print('k: %d' % k)
         
-    if not len(hidden_layers):
+    if hidden_layers is None:
         print('Searching MLP architectures...')
         hidden_layers = get_MLP_arch(X, y)
         print('hidden_layers: ', hidden_layers)
         
-    if not len(ada_params):
+    if ada_params is None:
         print('Searching AdaBoost params...')
         ada_params = get_adaBoost_params(X, y)
         print('ada_params: ', ada_params)
@@ -403,12 +394,15 @@ def get_confusion_matrix(X, y, codebook, n_rep=30):
     # Normalize the confusion matrix
     for call_type in codebook:
         code = codebook[call_type]
+        s = 0.0
         for ctype in codebook:
             m = np.nanmean(confuse_mat[call_type][ctype])
-            if np.isnan(m):
-                pdb.set_trace()
-            else:
-                confuse_mat[call_type][ctype] = m
+            s += m
+            confuse_mat[call_type][ctype] = m
+        # they might not sum up to 100 due to the sampling.
+        # -> make sure that they do.
+        for ctype in codebook:            
+            confuse_mat[call_type][ctype] *= 100./s
             
     return confuse_mat
     
@@ -464,7 +458,7 @@ def print_table5(data, codebook):
 def print_table2(results):
     
     M_acc = results['M_acc']
-    SE_acc = results['M_acc']
+    SE_acc = results['SE_acc']
     M_f1 = results['M_f1']
     SE_f1 = results['SE_f1']    
     
@@ -474,8 +468,8 @@ def print_table2(results):
     print('   ', '-'*58)
     for method in M_acc.keys():
         print('%20s | %1.3f | %1.3f | %1.3f | %1.3f | %1.3f ' %
-              (method, M_acc[method][-1], SE_acc[method][-1],
-               M_f1[method][-1], SE_f1[method][-1], results['time'][method]))
+              (method, M_f1[method][-1], SE_f1[method][-1],
+               M_acc[method][-1], SE_acc[method][-1], results['time'][method]))
 
     
 def plot_figure2(results):
