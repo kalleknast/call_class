@@ -4,6 +4,7 @@ Created on Mon Aug  8 19:54:52 2016
 
 @author: hjalmar
 """
+from __future__ import print_function
 import timeit
 import numpy as np
 from scipy.io import wavfile
@@ -18,6 +19,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import train_test_split, StratifiedKFold
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import f1_score
+import os
+import tarfile
+from glob import glob
+from six.moves import range
+from six.moves.urllib.request import urlretrieve
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
@@ -53,6 +59,49 @@ def accuracy(y_predict, y_true, nClass=8):
     acc = 1 - (e1 + e2).sum() / nClass
 
     return acc
+    
+
+def maybe_extract_calls(fname):
+    """
+    """
+    extract = True
+    fnames = glob('Marmoset*')
+    for fn in fnames:
+        if os.path.isdir(fn):
+            extract = False
+            break
+
+    if extract:
+        print('Extracting calls.')
+        tar = tarfile.open(fname)
+        tar.extractall()
+        fn = tar.getnames()[0].split('/')[0]
+        tar.close()
+       
+    return os.path.realpath(fn)
+
+    
+def maybe_download(fname='MarmosetVocalizations.tar.gz',
+                   url='http://neuro.ufrn.br/_tools/data/marmosetvocalizations'):
+  """
+  Download a file if not locally present, and make sure it's the right size.
+  """
+  expected_fsize = 70692298  # Expected file size in bytes
+    
+  if not os.path.exists(fname):
+      print('Downloading archive with calls.')
+      fname, _ = urlretrieve('%s/%s' % (url.rstrip('/'), fname), fname)
+
+  statinfo = os.stat(fname)
+
+  if statinfo.st_size == expected_fsize:
+      print('Found and verified %s' % fname)
+  else:
+      print(statinfo.st_size)
+      raise Exception('Failed to verify %s. Can you get to it with a browser?' %
+                      fname)
+
+  return fname
 
         
 def get_data(call_fnames, N):

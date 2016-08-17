@@ -9,8 +9,9 @@ import numpy as np
 from glob import glob
 from call_class_helper import *
 
-# data_dir
-data_dir = '/home/hjalmar/Dropbox/shared_calls/Vocalizations'
+fname = maybe_download()
+data_dir = maybe_extract_calls(fname)
+
 sub_dirs = glob(data_dir + '/*')
 call_fnames = {}
 N = 0
