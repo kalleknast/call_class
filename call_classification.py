@@ -37,13 +37,16 @@ else:
 # Merge phee_2, phee_3 and phee_4        
 drop = True
 X_mrg, y_mrg, codebook_mrg = merge_calltypes(X, y, codebook,
-                                             calltypes2merge=['phee_2', 'phee_3', 'phee_4'],
+                                             calltypes2merge=['phee_2',
+                                                              'phee_3',
+                                                              'phee_4'],
                                              merged_calltype='phee',
                                              drop=drop)
 
 # Merge tsik and tsik_ek
 X_mrg, y_mrg, codebook_mrg = merge_calltypes(X_mrg, y_mrg, codebook_mrg,
-                                             calltypes2merge=['tsik_ek', 'tsik'],
+                                             calltypes2merge=['tsik_ek',
+                                                              'tsik'],
                                              merged_calltype='tsik',
                                              drop=drop)
 

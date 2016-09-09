@@ -28,7 +28,6 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 plt.ion()
-import pdb
 
 
 def accuracy(y_predict, y_true, nClass=8):
@@ -200,8 +199,6 @@ def get_SVM_params(X, y, kernel='rbf'):
     
     C_range = 2. ** np.arange(-5, 16, 2)
     gamma_range = 2. ** np.arange(3, -16, -2)
-    #  C_range = np.arange(2, 15, 2) Danillo strategy
-    #  gamma_range = np.arange(0, 5, 2) Danillo strategy
     param_grid = dict(gamma=gamma_range, C=C_range)
         
     svr = SVC(kernel=kernel)
@@ -418,7 +415,6 @@ def get_confusion_matrix(X, y, codebook, n_rep=30):
     """
     confuse_mat = {call_type: {} for call_type in codebook}
     opf = OPF()
-    classes = np.unique(y)
     
     for rep in range(n_rep):
         X_train, X_cv, y_train, y_cv = train_test_split(X, y, train_size=0.8)
@@ -435,9 +431,6 @@ def get_confusion_matrix(X, y, codebook, n_rep=30):
                 else:
                     
                     pct = 100*(y_pred==cde).sum()/(y_cv==cde).sum()
-                    #if np.isnan(pct):
-                     #   pdb.set_trace()
-                    #else:
                     confuse_mat[call_type][ctype].append(pct)
                             
     # Normalize the confusion matrix
