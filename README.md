@@ -1,7 +1,7 @@
 # Call classification
 
 A script to produce the results of the paper
-**Machine Learning Algorithms for Automatic Classification of Marmoset Vocalizations**
+[Machine Learning Algorithms for Automatic Classification of Marmoset Vocalizations](http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0163041)
 by Hjalmar K. Turesson, Sidarta Ribeiro, Danillo R. Pereira, João P. Papa & Victor Hugo C. de Albuquerque
 Published in Plos One 2016.
 
