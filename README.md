@@ -11,7 +11,7 @@ Automatic classification of vocalization type could potentially become a useful 
 ## To run
 Make sure ```numpy```, ```scipy```, ```audiolazy```, ```libopf_py```, ```sklearn``` and ```matplotlib``` are installed.
 
-Get ```libopf_py``` from https://github.com/LibOPF/LibOPF.
+Get ```libopf_py``` from https://github.com/dhaalves/LibOPF (it contains a bug fix that hasn't been merged in the main repo).
 
 From ipython run:
 ```python
